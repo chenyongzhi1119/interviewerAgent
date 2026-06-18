@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>大厂面试官 Agent · InterviewPro</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- Monaco removed: algo problems now redirect to LeetCode -->
+</head>
+<body>
+
+<header class="header">
+  <span class="header-title">大厂面试官 Agent</span>
+  <div class="header-nav">
+    <button class="nav-btn active" id="nav-setup" onclick="navTo('setup')">新面试</button>
+    <button class="nav-btn" id="nav-history" onclick="navTo('history')">历史记录</button>
+    <button class="nav-btn" id="nav-coding" onclick="navTo('coding')">AI 编程面试</button>
+    <button class="gear-btn" onclick="openSettings()" title="API 配置">设置</button>
+  </div>
+</header>
+
+<!-- SETTINGS MODAL -->
+<div class="modal-overlay" id="settings-modal" onclick="handleModalClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>API 供应商配置</h3>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body" id="settings-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存配置</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETUP VIEW — 顶部配置栏 + 双栏内容 + 底部按钮 -->
+<div id="setup-view" class="view active">
+
+  <!-- ① 配置栏 -->
+  <div class="setup-config-bar">
+    <div class="cfg-item">
+      <label>AI 供应商</label>
+      <select id="provider-select" onchange="onProviderChange()"><option value="">加载中...</option></select>
+    </div>
+    <div class="cfg-item">
+      <label>目标公司</label>
+      <select id="company-select"><option value="">加载中...</option></select>
+    </div>
+    <div class="cfg-item">
+      <label>面试轮次</label>
+      <select id="round-select">
+        <option value="1">一面 · 基础扎实性验证</option>
+        <option value="2">二面 · 项目深挖</option>
+        <option value="3">三面 · 系统设计 + 业务落地</option>
+      </select>
+    </div>
+    <div class="cfg-item" style="max-width:220px">
+      <label>当前模型</label>
+      <div id="model-display" class="model-display">—</div>
+    </div>
+  </div>
+
+  <!-- ② 双栏内容区 -->
+  <div class="setup-body">
+
+    <!-- 左栏：岗位 JD -->
+    <div class="setup-panel">
+      <div class="panel-head">
+        <span class="panel-label">岗位 JD</span>
+        <select id="jd-preset-select" class="preset-select" onchange="applyJDPreset(this.value)">
+          <option value="">选择预设 JD</option>
+          <option value="ai_compiler">AI 编译器工程师</option>
+          <option value="inference">LLM 推理加速工程师</option>
+          <option value="ai_infra">AI Infra 工程师（训练平台）</option>
+          <option value="backend_go">后端开发工程师（Go 方向）</option>
+          <option value="pretrain">大模型预训练算法工程师</option>
+        </select>
+      </div>
+      <div class="panel-body">
+        <textarea
+          class="panel-textarea" id="jd-input"
+          placeholder="粘贴 JD 文字；或 Ctrl+V 粘贴截图，自动提取文字..."
+          onpaste="handleJDPaste(event)"
+        ></textarea>
+        <div class="extract-hint" id="jd-extract-hint" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- 右栏：个人简历 -->
+    <div class="setup-panel">
+      <div class="panel-head">
+        <span class="panel-label">个人简历</span>
+        <div class="input-mode-tabs">
+          <button class="tab-btn active" id="tab-pdf"  onclick="setResumeMode('pdf')">上传 PDF</button>
+          <button class="tab-btn"        id="tab-text" onclick="setResumeMode('text')">粘贴文字 / 截图</button>
+        </div>
+      </div>
+      <div class="panel-body">
+
+        <!-- PDF 上传区 -->
+        <div id="resume-pdf-zone">
+          <label class="pdf-upload-zone" id="pdf-drop-zone">
+            <input type="file" id="resume-file" accept=".pdf" onchange="handlePDF(this)" />
+            <span class="pdf-icon">PDF</span>
+            <span class="pdf-label" id="pdf-label">点击选择 PDF 简历，或拖拽到此处</span>
+            <span class="pdf-sub">自动解析文字 · 支持中英文简历</span>
+            <button class="pdf-clear" id="pdf-clear" onclick="clearPDF(event)">移除文件</button>
+          </label>
+        </div>
+
+        <!-- 文字 / 截图 -->
+        <div id="resume-text-zone" style="display:none;flex:1;display:none;flex-direction:column;">
+          <textarea
+            class="panel-textarea" id="resume-input"
+            placeholder="粘贴简历文字；或 Ctrl+V 粘贴截图，自动提取文字..."
+            onpaste="handleResumePaste(event)"
+          ></textarea>
+          <div class="extract-hint" id="resume-extract-hint" style="display:none"></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /.setup-body -->
+
+  <!-- ③ 底部操作栏 -->
+  <div class="setup-action-bar">
+    <span style="font-size:12px;color:var(--text3)">填写 JD 和简历后开始面试</span>
+    <button class="btn btn-primary" id="start-btn" onclick="startInterview()" style="min-width:120px">
+      开始面试
+    </button>
+  </div>
+
+</div>
+
+<!-- CHAT VIEW -->
+<div id="chat-view" class="view">
+  <div class="chat-info-bar">
+    <span class="round-tag" id="round-tag">一面</span>
+    <span class="company-name" id="company-display"></span>
+    <span class="spacer"></span>
+    <button class="btn btn-danger" onclick="endRound()" id="end-round-btn">结束本轮 · 获取评估</button>
+  </div>
+  <div class="messages" id="messages"></div>
+  <div class="input-area">
+    <textarea id="chat-input" placeholder="输入回答... (Enter 发送，Shift+Enter 换行)" rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="btn-voice" id="voice-btn" onclick="toggleVoice()" title="语音输入">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 1a4 4 0 0 1 4 4v7a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v7a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2z"/>
+        <path d="M19 11a1 1 0 0 1 1 1 8 8 0 0 1-16 0 1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z"/>
+        <path d="M12 20a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1z"/>
+      </svg>
+    </button>
+    <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">发送</button>
+  </div>
+</div>
+
+<!-- EVALUATE VIEW -->
+<div id="evaluate-view" class="view">
+  <div class="evaluate-card">
+    <h2>本轮面试评估</h2>
+    <div class="evaluate-content" id="evaluate-content"></div>
+    <div class="evaluate-actions">
+      <button class="btn btn-primary" id="next-round-btn" onclick="nextRound()">继续下一轮</button>
+      <button class="btn btn-secondary" onclick="backToSetup()">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY LIST VIEW -->
+<div id="history-view" class="view">
+  <div class="history-toolbar">
+    <h3>历史面试记录</h3>
+    <span class="spacer"></span>
+    <span class="history-count" id="history-count"></span>
+  </div>
+  <div id="history-list" class="history-list"></div>
+</div>
+
+<!-- HISTORY DETAIL VIEW -->
+<div id="history-detail-view" class="view">
+  <div class="detail-toolbar">
+    <button class="back-btn" onclick="navTo('history')">← 返回列表</button>
+    <span class="detail-title" id="detail-title"></span>
+    <span class="detail-meta" id="detail-meta"></span>
+    <div id="detail-actions"></div>
+  </div>
+  <div class="messages" id="detail-messages"></div>
+</div>
+
+<!-- ══ CODING VIEW ═══════════════════════════════════════════════ -->
+<div id="coding-view" class="view">
+
+  <!-- 顶部栏 -->
+  <div class="coding-topbar">
+    <button class="back-btn" onclick="navTo('setup')">← 返回</button>
+    <span class="coding-title">AI Coding 面试</span>
+    <div class="topbar-spacer"></div>
+    <button class="btn btn-secondary" onclick="randomAIProblem()">换一题</button>
+  </div>
+
+  <!-- 主体内容：左侧题目 + 右侧 AI 对话 -->
+  <div class="coding-body">
+
+    <!-- 左：题目面板 -->
+    <div class="problem-panel" id="problem-panel"></div>
+
+    <!-- 分隔线 -->
+    <div class="coding-divider"></div>
+
+    <!-- 右：AI Coding 聊天 -->
+    <div class="editor-panel">
+      <div id="ai-editor-wrap" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <!-- 对话消息区 -->
+        <div class="messages" id="coding-ai-messages"
+             style="flex:1;overflow-y:auto;padding:16px 20px;background:var(--bg);display:flex;flex-direction:column;gap:14px">
+          <div id="coding-ai-placeholder" style="color:var(--text3);font-size:13px;margin:auto;text-align:center">
+            加载题目中...
+          </div>
+        </div>
+        <!-- 输入区 -->
+        <div class="coding-ai-input-bar">
+          <textarea
+            id="coding-ai-input"
+            class="coding-ai-textarea"
+            placeholder="输入你的回答... (Enter 发送，Shift+Enter 换行)"
+            rows="3"
+            onkeydown="codingAIKey(event)"
+            oninput="codingAIResize(this)"
+          ></textarea>
+          <div class="coding-ai-send-row">
+            <span class="coding-ai-hint">Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行</span>
+            <button class="btn btn-primary" id="coding-ai-send" onclick="sendAICodingMessage()">发送</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+</div>
+
+<script src="/problems.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
