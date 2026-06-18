@@ -55,26 +55,24 @@ cat > "$APP_DIR/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-echo "▶ 生成应用图标..."
-if [ -f "assets/app_icon_512.png" ]; then
-  ICONSET_DIR="$APP_DIR/Contents/Resources/AppIcon.iconset"
-  mkdir -p "$ICONSET_DIR"
-  # 生成各尺寸图标（macOS 要求）
-  for size in 16 32 64 128 256 512; do
-    sips -z $size $size assets/app_icon_512.png \
-      --out "$ICONSET_DIR/icon_${size}x${size}.png" > /dev/null 2>&1
-    double=$((size * 2))
-    if [ $double -le 512 ]; then
-      sips -z $double $double assets/app_icon_512.png \
-        --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" > /dev/null 2>&1
-    fi
-  done
-  iconutil -c icns "$ICONSET_DIR" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
-  rm -rf "$ICONSET_DIR"
-  echo "   图标生成完成"
-else
-  echo "   ⚠ 未找到 assets/app_icon_512.png，跳过图标"
-fi
+echo "▶ 生成应用图标（蓝色圆形 + 白色大写 I）..."
+# 用 Go 生成 512×512 PNG，再转为 icns
+go run scripts/gen_icon.go assets/app_icon_512.png
+
+ICONSET_DIR="$APP_DIR/Contents/Resources/AppIcon.iconset"
+mkdir -p "$ICONSET_DIR"
+for size in 16 32 64 128 256 512; do
+  sips -z $size $size assets/app_icon_512.png \
+    --out "$ICONSET_DIR/icon_${size}x${size}.png" > /dev/null 2>&1
+  double=$((size * 2))
+  if [ $double -le 512 ]; then
+    sips -z $double $double assets/app_icon_512.png \
+      --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" > /dev/null 2>&1
+  fi
+done
+iconutil -c icns "$ICONSET_DIR" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET_DIR"
+echo "   图标生成完成"
 
 echo "▶ 清理临时文件..."
 rm -f "$BINARY"

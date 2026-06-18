@@ -3,12 +3,22 @@
 package main
 
 import (
+	"net"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/getlantern/systray"
 )
+
+func isPortInUse(addr string) bool {
+	conn, err := net.DialTimeout("tcp", "localhost"+addr, 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
 
 // runAsTrayApp 启动菜单栏模式：
 //  1. 在后台启动 HTTP 服务器（传入 serverReady channel）
@@ -31,13 +41,20 @@ func onTrayReady(serverReady chan struct{}, startServer func(ready chan<- struct
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("退出", "退出 InterviewPro")
 
-	// 后台启动 HTTP 服务器
-	go startServer(serverReady)
+	// 尝试启动服务器（若端口已被占用则直接复用已有实例）
+	go func() {
+		if isPortInUse(":8080") {
+			// 端口已被占用（可能是另一个实例），直接复用
+			serverReady <- struct{}{}
+		} else {
+			startServer(serverReady)
+		}
+	}()
 
 	// 服务就绪后自动打开浏览器
 	go func() {
 		<-serverReady
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(400 * time.Millisecond)
 		openBrowser()
 	}()
 
