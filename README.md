@@ -51,13 +51,15 @@ cd interviewerAgent
 
 项目支持多家 AI 供应商，**选择一家注册即可**，推荐新手使用 DeepSeek（国内可用、有免费额度）：
 
-| 供应商 | 注册地址 | 是否免费 | 国内可用 |
-|--------|---------|---------|---------|
-| **DeepSeek（推荐）** | [platform.deepseek.com](https://platform.deepseek.com) | 有免费额度 | ✅ |
-| 智谱 GLM | [open.bigmodel.cn](https://open.bigmodel.cn) | 有免费额度 | ✅ |
-| 阿里 Qwen | [dashscope.aliyuncs.com](https://dashscope.aliyuncs.com) | 有免费额度 | ✅ |
-| Claude | [console.anthropic.com](https://console.anthropic.com) | 需付费 | ❌（需代理） |
-| GPT-4.1 | [platform.openai.com](https://platform.openai.com) | 需付费 | ❌（需代理） |
+| 供应商 | 默认模型 | 注册地址 | 是否免费 | 国内可用 |
+|--------|---------|---------|---------|---------|
+| **DeepSeek（推荐）** | deepseek-chat | [platform.deepseek.com](https://platform.deepseek.com) | 有免费额度 | ✅ |
+| 智谱 GLM | glm-4-flash | [open.bigmodel.cn](https://open.bigmodel.cn) | 有免费额度 | ✅ |
+| 阿里 Qwen | qwen-plus | [dashscope.aliyuncs.com](https://dashscope.aliyuncs.com) | 有免费额度 | ✅ |
+| Claude | claude-sonnet-4-6 | [console.anthropic.com](https://console.anthropic.com) | 需付费 | ❌（需代理） |
+| OpenAI | gpt-4.1 | [platform.openai.com](https://platform.openai.com) | 需付费 | ❌（需代理） |
+
+> 可在「设置 → 高级选项 → 模型名称」中自定义模型，OpenAI 支持 `gpt-4.1`、`gpt-4.1-mini`、`gpt-4.1-nano`、`o4-mini`、`o3`、`gpt-5` 等。
 
 **DeepSeek 注册步骤（以此为例）：**
 1. 打开 [platform.deepseek.com](https://platform.deepseek.com)
