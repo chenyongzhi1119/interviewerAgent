@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,8 +14,11 @@ import (
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
+	"interviewer-agent/internal/difficulty"
 	"interviewer-agent/internal/llm"
+	"interviewer-agent/internal/memory"
 	"interviewer-agent/internal/model"
+	"interviewer-agent/internal/skill"
 )
 
 // Store manages active interview sessions, company profiles, and LLM providers.
@@ -24,6 +28,11 @@ type Store struct {
 	companies   map[string]*model.CompanyProfile
 	providers   llm.Registry
 	sessionsDir string
+
+	// 三大增强系统（可选，nil = 不启用）
+	MemSvc   *memory.MemoryService
+	Sched    *difficulty.PhaseScheduler
+	SkillReg *skill.SkillRegistry
 }
 
 // NewStore initializes the store.
@@ -206,7 +215,7 @@ func (s *Store) StartInterview(sess *model.Session, w io.Writer) error {
 	opener := model.Message{Role: model.RoleUser, Content: openerText, IsHidden: true}
 	sess.Messages = append(sess.Messages, opener)
 
-	systemPrompt := BuildSystemPrompt(profile, sess)
+	systemPrompt := BuildSystemPrompt(profile, sess, s.MemSvc, s.Sched, s.SkillReg)
 	reply, err := provider.Stream(nil, systemPrompt, sess, sess.Messages, w)
 	if err != nil {
 		return err
@@ -227,16 +236,99 @@ func (s *Store) Chat(sess *model.Session, userMsg string, w io.Writer) error {
 		return err
 	}
 
+	// ── Skill 状态机：检测触发 / 推进当前 Skill ──────────────────
+	if s.SkillReg != nil {
+		skillCtx := &skill.SkillContext{
+			UserID:    sess.UserID,
+			SessionID: sess.ID,
+			Phase:     sess.DiffPhase,
+			Metadata:  sess.SkillMetadata,
+		}
+		if sess.SkillMetadata == nil {
+			sess.SkillMetadata = make(map[string]any)
+			skillCtx.Metadata = sess.SkillMetadata
+		}
+
+		// 如果有激活的 Skill，检查是否完成
+		if sess.ActiveSkill != "" {
+			sk := s.SkillReg.Get(sess.ActiveSkill)
+			if sk != nil {
+				if sk.IsComplete(skillCtx) {
+					// Skill 完成，退出技能模式
+					sess.ActiveSkill = ""
+					sess.SkillMetadata = nil
+				} else {
+					// 继续技能模式
+					sk.OnTurnEnd(skillCtx, userMsg)
+					sess.SkillTurnCount++
+				}
+			}
+		} else {
+			// 未激活 Skill，检测是否触发新 Skill
+			if matched := s.SkillReg.Match(skillCtx, userMsg); matched != nil {
+				sess.ActiveSkill = matched.Name()
+				sess.SkillMetadata = map[string]any{}
+				sess.SkillTurnCount = 0
+			}
+		}
+	}
+
 	sess.Messages = append(sess.Messages, model.Message{Role: model.RoleUser, Content: userMsg})
-	systemPrompt := BuildSystemPrompt(profile, sess)
+	systemPrompt := BuildSystemPrompt(profile, sess, s.MemSvc, s.Sched, s.SkillReg)
 	reply, err := provider.Stream(nil, systemPrompt, sess, sess.Messages, w)
 	if err != nil {
 		return err
 	}
-
 	sess.Messages = append(sess.Messages, model.Message{Role: model.RoleAssistant, Content: reply})
+
+	// ── 难度自适应：LLM 内置评分提示（简化版，实际可由 LLM 显式输出分数）──
+	// 这里用回复长度作为代理信号（详细回答 → 得分较高）
+	// 生产环境可在 LLM system prompt 中要求输出 JSON score 字段
+	if s.Sched != nil && sess.DiffPhase != "" {
+		score := estimateScore(reply)
+		st := sessionToDiffState(sess)
+		diffChanged, phaseChanged := s.Sched.RecordScore(st, score)
+		diffStateToSession(st, sess)
+
+		if s.MemSvc != nil && sess.UserID != "" {
+			s.MemSvc.RecordAnswer(context.Background(), &memory.QuestionRecord{
+				SessionID:  sess.ID,
+				UserID:     sess.UserID,
+				Phase:      string(st.Phase),
+				Difficulty: sess.DiffLevel,
+				Question:   userMsg,
+				Score:      score,
+			})
+		}
+
+		if diffChanged {
+			log.Printf("session %s: difficulty → %d", sess.ID, sess.DiffLevel)
+		}
+		if phaseChanged {
+			log.Printf("session %s: phase → %s", sess.ID, sess.DiffPhase)
+		}
+	}
+
 	s.persist(sess)
 	return nil
+}
+
+// estimateScore 用回复质量代理估算候选人得分（0-100）。
+// 生产环境可要求 LLM 在 system prompt 中显式输出 "score: XX" 然后解析。
+func estimateScore(candidateReply string) float64 {
+	n := len([]rune(candidateReply))
+	switch {
+	case n < 20:
+		return 30 // 太短，基本没答
+	case n < 80:
+		return 55
+	case n < 200:
+		return 68
+	case n < 500:
+		return 75
+	default:
+		return 82 // 详细作答，基础分较高
+	}
 }
 
 func (s *Store) Evaluate(sess *model.Session, w io.Writer) error {
@@ -252,7 +344,7 @@ func (s *Store) Evaluate(sess *model.Session, w io.Writer) error {
 	sess.Status = model.StatusEvaluating
 	evalPrompt := BuildEvaluationPrompt(profile, sess)
 	allMsgs := append(sess.Messages, model.Message{Role: model.RoleUser, Content: evalPrompt})
-	systemPrompt := BuildSystemPrompt(profile, sess)
+	systemPrompt := BuildSystemPrompt(profile, sess, s.MemSvc, s.Sched, s.SkillReg)
 
 	reply, err := provider.Stream(nil, systemPrompt, sess, allMsgs, w)
 	if err != nil {

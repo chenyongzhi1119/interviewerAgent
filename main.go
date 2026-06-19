@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -13,8 +14,11 @@ import (
 	"time"
 
 	"interviewer-agent/internal/agent"
+	"interviewer-agent/internal/difficulty"
 	"interviewer-agent/internal/llm"
+	"interviewer-agent/internal/memory"
 	"interviewer-agent/internal/server"
+	"interviewer-agent/internal/skill"
 )
 
 //go:embed all:web
@@ -117,6 +121,25 @@ func startHTTPServer(ready chan<- struct{}) {
 	if err != nil {
 		log.Fatalf("failed to init store: %v", err)
 	}
+
+	// ── 初始化三大增强系统 ─────────────────────────────────────────
+	// Memory System（SQLite 持久化 + 内存 Cache-Aside）
+	memDBPath := filepath.Join(sessionsDir, "..", "memory.db")
+	if memSvc, err := memory.NewMemoryService(memDBPath); err == nil {
+		store.MemSvc = memSvc
+		log.Println("Memory system enabled:", memDBPath)
+		go memSvc.PruneExpired(context.Background()) // 后台清理过期薄弱点
+	} else {
+		log.Printf("Memory system disabled: %v", err)
+	}
+
+	// Dynamic Difficulty Scheduler
+	store.Sched = difficulty.DefaultScheduler()
+	log.Println("Dynamic difficulty scheduler enabled")
+
+	// Skill Registry（4 个内置 Skill）
+	store.SkillReg = skill.NewRegistry()
+	log.Printf("Skill registry enabled: %d skills registered", len(store.SkillReg.List()))
 
 	var webFS fs.FS
 	if customWeb := os.Getenv("WEB_DIR"); customWeb != "" {
