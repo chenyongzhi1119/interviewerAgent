@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"interviewer-agent/internal/agent"
 	"interviewer-agent/internal/llm"
@@ -32,6 +34,11 @@ func main() {
 	}
 
 	if trayMode {
+		// 单实例控制：如果服务已在运行，直接打开浏览器，本进程退出
+		if isInterviewProRunning() {
+			openBrowserURL("http://localhost:8080")
+			return
+		}
 		runAsTrayApp(func(ready chan<- struct{}) {
 			startHTTPServer(ready)
 		})
@@ -168,4 +175,20 @@ func extractEmbeddedCompanies() (string, error) {
 		}
 	}
 	return tmpDir, nil
+}
+
+// isInterviewProRunning 检测 8080 端口是否已有 InterviewPro 实例在运行。
+func isInterviewProRunning() bool {
+	client := &http.Client{Timeout: 800 * time.Millisecond}
+	resp, err := client.Get("http://localhost:8080/api/companies")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+// openBrowserURL 在 macOS 上用默认浏览器打开 URL。
+func openBrowserURL(url string) {
+	exec.Command("open", url).Start()
 }
