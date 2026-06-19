@@ -71,8 +71,8 @@ func KnownProviders(registry Registry) []ProviderInfo {
 			RegisterURL: "https://console.anthropic.com",
 		},
 		{
-			ID: "openai", DisplayName: "GPT-4o（OpenAI）",
-			Model: "gpt-4o", SupportsPDF: false, SupportsImg: true,
+			ID: "openai", DisplayName: "GPT-4.1（OpenAI）",
+			Model: "gpt-4.1", SupportsPDF: false, SupportsImg: true,
 			RegisterURL:    "https://platform.openai.com",
 			DefaultBaseURL: "https://api.openai.com/v1",
 		},

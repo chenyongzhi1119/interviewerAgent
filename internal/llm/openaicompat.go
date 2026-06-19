@@ -31,7 +31,7 @@ var openAICompatPresets = map[string]struct {
 	displayName string
 	supportsImg  bool
 }{
-	"openai":   {"https://api.openai.com/v1", "gpt-4o", "GPT-4o（OpenAI）", true},
+	"openai":   {"https://api.openai.com/v1", "gpt-4.1", "GPT-4.1（OpenAI）", true},
 	"deepseek": {"https://api.deepseek.com/v1", "deepseek-chat", "DeepSeek", false},   // deepseek-chat 不支持图片
 	"glm":      {"https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", "GLM-4（智谱 AI）", false}, // glm-4-flash 不支持图片；视觉需用 glm-4v
 	"qwen":     {"https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", "Qwen（阿里云）", true},
