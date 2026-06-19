@@ -78,7 +78,7 @@ func KnownProviders(registry Registry) []ProviderInfo {
 		},
 		{
 			ID: "deepseek", DisplayName: "DeepSeek",
-			Model: "deepseek-chat", SupportsPDF: false, SupportsImg: false, // deepseek-chat 不支持图片
+			Model: "deepseek-v4-flash", SupportsPDF: false, SupportsImg: false, // deepseek-chat 不支持图片
 			RegisterURL:    "https://platform.deepseek.com",
 			DefaultBaseURL: "https://api.deepseek.com/v1",
 		},
